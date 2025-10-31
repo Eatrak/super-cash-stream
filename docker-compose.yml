@@ -1,0 +1,61 @@
+services:
+  broker:
+    image: apache/kafka:latest
+    container_name: broker
+    hostname: broker
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_NODE_ID: 1
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker:9093
+      KAFKA_LISTENERS: PLAINTEXT://broker:9092,CONTROLLER://broker:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+
+  topic-creator:
+    image: apache/kafka:latest
+    container_name: topic-creator
+    depends_on:
+      - broker
+    entrypoint: ["/bin/bash", "-c"]
+    command: |
+      "
+      echo 'Aspetto che Kafka sia pronto...';
+      sleep 10;
+      echo 'Creo il topic super-cash-stream...';
+      /opt/kafka/bin/kafka-topics.sh --create --topic super-cash-stream --bootstrap-server broker:9092 || true;
+      echo 'Topic super-cash-stream creato con successo.';
+      echo 'Creo il topic hourly-cash-stats...';
+      /opt/kafka/bin/kafka-topics.sh --create --topic hourly-cash-stats --bootstrap-server broker:9092 || true;
+      echo 'Topic hourly-cash-stats creato con successo.';
+      "
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: logstash
+    depends_on:
+      - topic-creator
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./cash-registers:/usr/share/logstash/cash-registers:ro
+    environment:
+      LS_JAVA_OPTS: "-Xms512m -Xmx512m"
+
+  kafka-stream:
+    build:
+      context: ./kafka-stream
+    container_name: kafka-stream
+    depends_on:
+      - topic-creator
+    environment:
+      NODE_ENV: production

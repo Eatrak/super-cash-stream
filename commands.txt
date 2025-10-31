@@ -1,0 +1,8 @@
+# Enter in broker
+docker exec -it -w /opt/kafka/bin broker sh
+
+# Start consumer for super-cash-stream
+./kafka-console-consumer.sh --topic super-cash-stream --bootstrap-server broker:9092 --from-beginning
+
+# Start consumer for hourly-cash-stats
+./kafka-console-consumer.sh --topic hourly-cash-stats --bootstrap-server broker:9092 --from-beginning
